@@ -1,0 +1,329 @@
+---
+title: "Mini-Lesson 1"
+author: "Sumner Perera"
+date: January 30, 2025
+format: 
+    pdf:
+      keep-tex: true
+      latex-engine: xelatex
+      include-in-header: 
+        text: |
+          \usepackage{fvextra}
+          \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+          \DefineVerbatimEnvironment{OutputCode}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+## 2: Obtaining the Data 
+Completed - data downloaded 
+
+## 3. Preparing the Data
+
+1. Check 
+2. 
+```{python}
+## load packages 
+import pandas as pd 
+import numpy as np 
+```
+
+
+```{python}
+## open up the data 
+path = r"C:\Users\12019\OneDrive - The University of Chicago\Documents\GitHub\Machine-Learning\mini_lesson_1\usa_00001.csv"
+
+edu = pd.read_csv(path)
+
+```
+
+a. 
+
+```{python}
+## open up the crosswalk 
+path2 = r"C:\Users\12019\OneDrive - The University of Chicago\Documents\GitHub\Machine-Learning\mini_lesson_1\PPHA_30545_MP01-Crosswalk.csv"
+
+crosswalk = pd.read_csv(path2)
+crosswalk.rename(columns={"educd": "EDUCD", "educdc": "EDUCDC"}, inplace = True)
+
+## create new column using crosswalk 
+edu_merged = edu.merge(crosswalk, on = "EDUCD", how = "left")
+```
+
+b. 
+
+```{python}
+## create dummy variables 
+### hsdip for EDUCDC values 12-15
+hs=[12,13,14,15]
+edu_merged['hsdip'] = np.where(edu_merged['EDUCDC'].isin(hs), 1, 0)
+
+### coldip for EDUCDC values 16 or greater
+edu_merged['coldip'] = np.where(edu_merged['EDUCDC']>= 16, 1, 0)
+
+### white for RACE = 1, black for RACE = 2, hispanic for HISPAN = 1, 2, 3, 4
+edu_merged['white'] = np.where(edu_merged['RACE'] == 1, 1, 0)
+edu_merged['black'] = np.where(edu_merged['RACE'] == 2, 1, 0)
+hisp=[1,2,3,4]
+edu_merged['hispanic'] = np.where(edu_merged['HISPAN'].isin(hisp), 1, 0)
+
+## married for MARST = 1 or 2 
+mar=[1,2]
+edu_merged['married'] = np.where(edu_merged['MARST'].isin(mar), 1, 0)
+
+## female for SEX = 2
+edu_merged['female'] = np.where(edu_merged['SEX'] == 2, 1, 0)
+
+## vet for VETSTAT=2
+edu_merged['vet'] = np.where(edu_merged['VETSTAT'] == 2, 1, 0)
+
+```
+
+c. 
+
+```{python}
+## create the interaction term between both of the education dummies and the continuous
+edu_merged['interact'] = edu_merged['hsdip']*edu_merged['coldip']*edu_merged['EDUCDC']
+```
+
+d. 
+
+```{python}
+## age squared var 
+edu_merged['age_sq']= np.power(edu_merged['AGE'],2) 
+
+## drop any observations where incwage<=0.
+edu_merged_clean = edu_merged.loc[edu_merged['INCWAGE']>0]
+
+## create new var that's the ln of INCWAGE
+edu_merged_clean['lnincwage'] = np.log(edu_merged['INCWAGE'])
+
+```
+
+## 4. Data Analysis Questions 
+
+1. 
+
+```{python}
+## descriptive stats for multiple variables 
+vars = ['YEAR', 'INCWAGE', 'lnincwage', 'EDUCDC', 'female', 'AGE', 'age_sq', 'white', 'black', 'hispanic', 'married', 'NCHILD', 'vet', 'hsdip', 'coldip', 'interact']
+
+for title in vars: 
+  print(f'Descriptive stats for {title}')
+  print(edu_merged_clean[title].describe())
+
+```
+
+2. 
+
+```{python}
+## scatter plot of lnincwage and educdc
+import matplotlib.pyplot as plt 
+import seaborn as sns 
+
+## create linear fit 
+from sklearn.linear_model import LinearRegression as lm
+y = edu_merged_clean[['lnincwage']].values
+X = edu_merged_clean[['EDUCDC' ]].values
+y_pred = lm().fit(X, y).predict(X)
+
+## create plot with linear fit
+fig,ax = plt.subplots()
+ax.scatter(edu_merged_clean['EDUCDC'], edu_merged_clean['lnincwage'], alpha=0.2, s=25, label='Data Points')
+ax.plot(X, y_pred, color="purple", linewidth=3, label='Linear Fit')
+
+## set title, legend, labels
+ax.set_xlabel("Years of Education")
+ax.set_ylabel("Log of Income")
+ax.set_title('Log of Income vs. Years of Education')
+ax.legend()
+
+## show plot 
+plt.show()
+
+```
+
+3. 
+
+```{python}
+## load libraries
+import statsmodels.formula.api as smf
+
+## estimate given model 
+regression = smf.ols('lnincwage ~ EDUCDC + female + AGE + age_sq + white + black + hispanic + married + NCHILD + vet', data = edu_merged_clean).fit()
+print(regression.summary())
+```
+
+a. According to the R^2 value, the model explains 29% of the variation in log wages. 
+
+b. An additional year of education gives an increase of 8.9% in income, holding all else constant. This is statistically significant at the 5% significance level with a p value that is less than 0.05 but practically this doesn't necessarily hold true for all levels of education. 
+
+For example, no children work thus a change from 2 to 3 years of education (which would signify a toddler) then their wage should not increase but rather stay static at 0. This would be the case all the way until an individual reaches high school which is 12 years of schooling at which point they are able to legally get a job and then additional years of schooling would impact their earnings. 
+
+c. To figure out the age that gives the largest increase in % of age, take the derivative of the regression with respect to age and solve for the variable. This gives an age of 49 that yields the highest % increase in wage. 
+
+(see calculations at end of PDF)
+
+d. The model predicts that men will have higher wages, all else equal, as indicated by the negative value of the female coefficient of -0.4297. We might observe this pattern in the data because there might be bias against women to pay them less than their male counterparts. 
+
+e. Holding all else equal, being white is associated with a 0.96% increase in wage. This value is not significant however because the p value is larger than the threshold significance level of 0.05. 
+
+Being black, holding all else equal, is associated with a 19.8% decrease in wages and this value is significant because the p value is smaller than 0.05. 
+
+4. 
+
+
+```{python}
+## subset no high school (hsdip=0 AND coldip=0)
+no_hsd = edu_merged_clean[(edu_merged_clean['hsdip'] == 0) & (edu_merged_clean['coldip'] ==0)] 
+
+## fit the linear regression prediction of lnincwage vs education for hsdip=0
+y_nhs = no_hsd[['lnincwage']].values
+X_nhs = no_hsd[['EDUCDC']].values
+y_pred_nhs = lm().fit(X_nhs, y_nhs).predict(X_nhs)
+
+```
+
+
+```{python}
+## subset high school diploma (hsdip=1)
+hsd = edu_merged_clean[edu_merged_clean['hsdip'] == 1]
+
+## fit the linear regression prediction of lnincwage vs education for hsdip=0
+y1 = hsd[['lnincwage']].values
+X1 = hsd[['EDUCDC' ]].values
+y_pred_hsd = lm().fit(X1, y1).predict(X1)
+```
+
+
+```{python}
+## subset high school diploma (coldip=1)
+col = edu_merged_clean[edu_merged_clean['coldip'] == 1]
+
+## fit the linear regression prediction of lnincwage vs education for hsdip=0
+y2 = col[['lnincwage']].values
+X2 = col[['EDUCDC' ]].values
+y_pred_col = lm().fit(X2, y2).predict(X2)
+```
+
+
+```{python}
+## graph the plot with the three separate trendlines 
+fig,ax = plt.subplots()
+ax.scatter(edu_merged_clean['EDUCDC'], edu_merged_clean['lnincwage'], alpha=0.2, s=25, label='Data Points')
+ax.plot(X_nhs, y_pred_nhs, color="orange", linewidth=3, label='No High School Diploma')
+ax.plot(X1, y_pred_hsd, color="yellow", linewidth=3, label='High School Diploma')
+ax.plot(X2, y_pred_col, color="green", linewidth=3, label='College Diploma')
+
+ax.set_xlabel("Years of Education")
+ax.set_ylabel("Log of Income")
+ax.set_title('Log of Income vs. Years of Education')
+ax.legend()
+
+```
+
+## Question 5
+
+a. The equation is 
+$ln(incwage)= \beta_{0} + \beta_{1}hsdip + \beta_{2}coldip +\beta_{3}female+\beta_{4}age+\beta_{5}age^2+\beta_{6}white+\beta_{7}black+\beta_{8}hispanic+\beta_{9}married+\beta_{10}nchild+\beta_{11}vet+\varepsilon$
+I think this is the best possible way to explain the data because it allows for conditioning based on the different education levels which in turn are different combinations of the variables hsdip and coldip. 
+
+b. 
+
+```{python}
+## estimate this model 
+regression1 = smf.ols('lnincwage ~ hsdip + coldip + female + AGE + age_sq + white + black + hispanic + married + NCHILD + vet', data = edu_merged_clean).fit()
+print(regression1.summary())
+```
+
+c. 
+
+```{python}
+## predict for 22 yr old female (who is neither white, black, nor Hispanic, is not married, has no children, and is not a veteran) with a high school diploma
+hs_22_f = edu_merged_clean.loc[(edu_merged_clean['AGE'] == 22) & (edu_merged_clean['female'] == 1) & (edu_merged_clean['hsdip'] == 1) & (edu_merged_clean['coldip'] == 0)]
+pred1 = regression1.get_prediction(hs_22_f)
+pred1.summary_frame(alpha=0.05)[:1]
+
+import math 
+math.exp(9.428)
+
+## predict but with college diploma
+col_22_f = edu_merged_clean.loc[(edu_merged_clean['AGE'] == 22) & (edu_merged_clean['female'] == 1) & (edu_merged_clean['hsdip'] == 0) & (edu_merged_clean['coldip'] == 1)]
+pred2 = regression1.get_prediction(col_22_f)
+pred2.summary_frame(alpha=0.05)[:1]
+
+math.exp(9.946)
+```
+
+For a 22 year old female (who is neither white, black, nor Hispanic, is not married, has no children, and is not a veteran) with a high school diploma then their expected wages, will be e^9.428 which is $12,431. For this same individual with a college degree their wage is equal to e^9.946 which is $20,868. 
+
+
+d. Looking a the model, there is a coefficient of 0.8867 for the college diploma term which means that holding all else equal there is on average about an 89% increase in wages for a person with a college degree compared to someone who does not have one. This is statistically significant at the 5% significance level. 
+
+e. Given the evidence, I would advise the President to pursue legislation to expand access to college education since it seems to have a large and significant effect on wages even when holding other variables like gender, age, race, married status, and number of children fixed. 
+
+f. This new model explains 31% of the variation that's observed in log income which is slightly higher than the previous model. The previous model explained 29.3%. 
+
+g. I'm pretty confident in my predictions because the increase in log wages is significant for individuals with a degree and the model explains over 30% of the variation in log wages that is observed in the data. This is pretty good considering the complexity of the relationship that we are trying to explain and the use of various predictors to try and control for other potential influences. 
+
+## Question 6 
+
+```{python}
+## library
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LinearRegression
+
+## prepare variables
+X_age = edu_merged_clean[['AGE']]
+X_hsdip = edu_merged_clean[['hsdip']]
+X_coldip = edu_merged_clean[['coldip']]
+X_fem = edu_merged_clean[['female']]
+X_white = edu_merged_clean[['white']]
+X_black = edu_merged_clean[['black']]
+X_hispanic = edu_merged_clean[['hispanic']]
+X_married = edu_merged_clean[['married']]
+X_nchild = edu_merged_clean[['NCHILD']]
+X_vet = edu_merged_clean[['vet']]
+y = edu_merged_clean['lnincwage']
+
+## knots for the age variable
+knots = np.array([18, 65]).reshape(-1, 1)
+
+## spline transformer
+spline_transformer = SplineTransformer(degree=3, knots = knots, include_bias = False)
+
+## transofrm age into spline functions
+X_splines = spline_transformer.fit_transform(X_age)
+
+## combine with controls 
+X = np.hstack([X_splines, X_hsdip, X_coldip, X_fem, X_white, X_black, X_hispanic, X_married, X_nchild, X_vet])
+
+## fit linear reg model 
+final = LinearRegression()
+final.fit(X,y)
+
+## print intercept 
+print('Intercept:', final.intercept_)
+
+## combine coefficient names 
+spline_columns = [f"spline_{i}" for i in range(X_splines.shape[1])]
+all_columns = spline_columns + ['hsdip'] + ['coldip'] + ['female'] + ['white'] + ['black'] + ['hispanic'] + ['married'] + ['NCHILD'] + ['vet']
+coefficients = pd.Series(final.coef_, index=all_columns)
+print("Coefficients:")
+print(coefficients)
+
+## get adj r^2
+# Calculate R^2
+r_squared = final.score(X, y)
+
+n = len(y)  
+p = X_splines.shape[1]  
+adjusted_r_squared = 1 - ((1 - r_squared) * (n - 1)) / (n - p - 1)
+print("Adjusted R-squared:", adjusted_r_squared)
+```
+
+The adjusted R^2 for this model is 0.321
+
+b. This adjusted R^2 is different from the previous model which was 0.313. These are different because the spline is a different model that allows for more flexibility than a regular linear regression so it would make sense that it's ability to explain variation in the y value of the data changes. 
+
+c. skip 
+
+d. Given the previous spline models with knots at 24 and 55, the values of the predictions for a female with a college diploma would be different because with a spline you are essentially creating mini models that you then stich together (at the knots) smoothly. This allows for more prediction accuracy because the splines behave like linear regression functions but have more flexibility, and therefore can better explain the variation in the data better than a regular OLS model. This is what we saw in the slightly higher adjusted R^2 value. 
